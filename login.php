@@ -1,59 +1,55 @@
 <?php
-include 'common/config.php';
+session_start();
 
 if (isset($_SESSION['user_id'])) {
-    header("Location: index.php");
+    header('Location: index.php');
     exit;
 }
 
-$msg = "";
-$msgType = "error";
+include 'common/config.php';
+
+$error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $type = $_POST['type'] ?? 'login';
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
 
-    if ($type === 'login') {
+    if ($email === '' || $password === '') {
+        $error = 'Email এবং Password দিন।';
+    } else {
 
-        $email = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
+        $stmt = $conn->prepare(
+            "SELECT id, name, email, phone, password
+             FROM users
+             WHERE email = ?
+             LIMIT 1"
+        );
 
-        if ($email === '' || $password === '') {
-            $msg = "Please enter your email/phone and password.";
-        } else {
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
 
-            $stmt = $conn->prepare(
-                "SELECT id, name, email, phone, password FROM users
-                 WHERE email = ? OR phone = ?
-                 LIMIT 1"
-            );
+        $result = $stmt->get_result();
 
-            $stmt->bind_param("ss", $email, $email);
-            $stmt->execute();
+        if ($result->num_rows === 1) {
 
-            $result = $stmt->get_result();
+            $user = $result->fetch_assoc();
 
-            if ($result->num_rows === 1) {
+            if (password_verify($password, $user['password'])) {
 
-                $user = $result->fetch_assoc();
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_name'] = $user['name'];
+                $_SESSION['user_email'] = $user['email'];
 
-                if (password_verify($password, $user['password'])) {
-
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['user_name'] = $user['name'];
-
-                    header("Location: index.php");
-                    exit;
-
-                } else {
-                    $msg = "Incorrect password.";
-                }
+                header('Location: index.php');
+                exit;
 
             } else {
-                $msg = "Account not found.";
+                $error = 'Email অথবা Password ভুল।';
             }
 
-            $stmt->close();
+        } else {
+            $error = 'Email অথবা Password ভুল।';
         }
     }
 }
@@ -61,241 +57,159 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<meta charset="UTF-8">
+    <title>Login - CODE TOP UP</title>
 
-<meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
-
-<title>CODE TOP UP - Login</title>
-
-<script src="https://cdn.tailwindcss.com"></script>
-
-<link rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-
-<style>
-
-body {
-    font-family: Arial, sans-serif;
-    background:
-        radial-gradient(circle at top, #1e293b 0%, #020617 55%, #000000 100%);
-}
-
-.glass {
-    background: rgba(15, 23, 42, 0.92);
-    backdrop-filter: blur(15px);
-}
-
-.input-box {
-    background: #0f172a;
-    border: 1px solid #334155;
-}
-
-.input-box:focus {
-    border-color: #22c55e;
-    outline: none;
-}
-
-.btn {
-    background: linear-gradient(135deg, #22c55e, #16a34a);
-}
-
-.btn:hover {
-    opacity: .9;
-}
-
-</style>
-
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="min-h-screen flex items-center justify-center p-4">
+<body class="min-h-screen bg-gray-950 text-white flex items-center justify-center p-4">
 
-<div class="glass w-full max-w-md rounded-2xl shadow-2xl border border-slate-700 overflow-hidden">
+<div class="w-full max-w-md">
 
-    <!-- Header -->
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl">
 
-    <div class="text-center px-6 pt-8 pb-5">
+        <div class="text-center mb-7">
 
-        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl
-                    bg-green-500/10 border border-green-500/30
-                    flex items-center justify-center">
+            <h1 class="text-3xl font-bold">
+                CODE TOP UP
+            </h1>
 
-            <i class="fa-solid fa-bolt text-green-400 text-2xl"></i>
-
-        </div>
-
-        <h1 class="text-2xl font-bold text-white">
-            CODE TOP UP
-        </h1>
-
-        <p class="text-sm text-slate-400 mt-2">
-            Login to your account
-        </p>
-
-    </div>
-
-
-    <!-- Message -->
-
-    <?php if ($msg): ?>
-
-        <div class="mx-6 mb-4 p-3 rounded-lg
-                    bg-red-500/10
-                    border border-red-500/30
-                    text-red-400 text-sm text-center">
-
-            <?php echo htmlspecialchars($msg); ?>
+            <p class="text-gray-400 mt-2">
+                Login to your account
+            </p>
 
         </div>
 
-    <?php endif; ?>
+        <?php if ($error): ?>
+
+            <div class="bg-red-500/10 border border-red-500/30
+                        text-red-400 rounded-lg p-3 mb-5 text-sm">
+                <?= htmlspecialchars($error) ?>
+            </div>
+
+        <?php endif; ?>
 
 
-    <!-- Login Form -->
+        <!-- Google Login -->
 
-    <form method="POST" class="px-6 pb-7 space-y-5">
+        <a
+            href="google-login.php"
+            class="w-full flex items-center justify-center gap-3
+                   bg-white text-gray-900 font-semibold
+                   py-3 rounded-xl hover:bg-gray-100 transition mb-5"
+        >
 
-        <input type="hidden"
-               name="type"
-               value="login">
+            <span class="text-xl">G</span>
+
+            Continue with Google
+
+        </a>
 
 
-        <!-- Email / Phone -->
+        <div class="flex items-center gap-3 my-5">
 
-        <div>
+            <div class="h-px bg-gray-700 flex-1"></div>
 
-            <label class="block text-sm text-slate-300 mb-2">
-                Email or Phone
+            <span class="text-gray-500 text-sm">
+                OR
+            </span>
+
+            <div class="h-px bg-gray-700 flex-1"></div>
+
+        </div>
+
+
+        <!-- Email Login -->
+
+        <form method="POST">
+
+            <label class="block text-sm text-gray-300 mb-2">
+                Email
+            </label>
+
+            <input
+                type="email"
+                name="email"
+                required
+                autocomplete="email"
+                placeholder="Enter your email"
+                class="w-full bg-gray-800 border border-gray-700
+                       rounded-xl px-4 py-3 mb-4
+                       outline-none focus:border-blue-500"
+            >
+
+
+            <label class="block text-sm text-gray-300 mb-2">
+                Password
             </label>
 
             <div class="relative">
-
-                <i class="fa-solid fa-user
-                          absolute left-4 top-1/2
-                          -translate-y-1/2
-                          text-slate-500"></i>
-
-                <input
-                    type="text"
-                    name="email"
-                    autocomplete="username"
-                    placeholder="Enter email or phone"
-                    required
-                    class="input-box w-full rounded-xl
-                           text-white py-3.5 pl-11 pr-4
-                           text-sm"
-                >
-
-            </div>
-
-        </div>
-
-
-        <!-- Password -->
-
-        <div>
-
-            <div class="flex justify-between items-center mb-2">
-
-                <label class="text-sm text-slate-300">
-                    Password
-                </label>
-
-                <a href="forgot-password.php"
-                   class="text-xs text-green-400 hover:underline">
-
-                    Forgot Password?
-
-                </a>
-
-            </div>
-
-
-            <div class="relative">
-
-                <i class="fa-solid fa-lock
-                          absolute left-4 top-1/2
-                          -translate-y-1/2
-                          text-slate-500"></i>
 
                 <input
                     id="password"
                     type="password"
                     name="password"
-                    autocomplete="current-password"
-                    placeholder="Enter password"
                     required
-                    class="input-box w-full rounded-xl
-                           text-white py-3.5 pl-11 pr-12
-                           text-sm"
+                    autocomplete="current-password"
+                    placeholder="Enter your password"
+                    class="w-full bg-gray-800 border border-gray-700
+                           rounded-xl px-4 py-3 pr-12
+                           outline-none focus:border-blue-500"
                 >
 
                 <button
                     type="button"
                     onclick="togglePassword()"
-                    class="absolute right-4 top-1/2
-                           -translate-y-1/2
-                           text-slate-500">
-
-                    <i id="eye"
-                       class="fa-solid fa-eye"></i>
-
+                    class="absolute right-3 top-1/2
+                           -translate-y-1/2 text-gray-400"
+                >
+                    👁
                 </button>
 
             </div>
 
-        </div>
+
+            <div class="text-right mt-3">
+
+                <a
+                    href="forgot-password.php"
+                    class="text-blue-400 text-sm hover:underline"
+                >
+                    Forgot Password?
+                </a>
+
+            </div>
 
 
-        <!-- Login -->
+            <button
+                type="submit"
+                class="w-full mt-5 bg-blue-600
+                       hover:bg-blue-700
+                       py-3 rounded-xl
+                       font-semibold transition"
+            >
+                Login
+            </button>
 
-        <button
-            type="submit"
-            class="btn w-full rounded-xl
-                   text-white font-bold
-                   py-3.5 transition">
-
-            <i class="fa-solid fa-right-to-bracket mr-2"></i>
-
-            LOGIN
-
-        </button>
+        </form>
 
 
-        <!-- Register -->
+        <div class="text-center mt-6 text-sm text-gray-400">
 
-        <div class="text-center pt-2">
+            Don't have an account?
 
-            <span class="text-sm text-slate-500">
-                Don't have an account?
-            </span>
-
-            <a href="register.php"
-               class="text-sm text-green-400
-                      font-semibold hover:underline ml-1">
-
+            <a
+                href="register.php"
+                class="text-blue-400 hover:underline"
+            >
                 Create Account
-
             </a>
 
         </div>
-
-    </form>
-
-
-    <!-- Footer -->
-
-    <div class="border-t border-slate-700
-                px-6 py-4 text-center">
-
-        <p class="text-xs text-slate-500">
-
-            © <?php echo date('Y'); ?> CODE TOP UP
-
-        </p>
 
     </div>
 
@@ -307,27 +221,12 @@ body {
 function togglePassword() {
 
     const password =
-        document.getElementById("password");
+        document.getElementById('password');
 
-    const eye =
-        document.getElementById("eye");
-
-    if (password.type === "password") {
-
-        password.type = "text";
-
-        eye.classList.remove("fa-eye");
-        eye.classList.add("fa-eye-slash");
-
-    } else {
-
-        password.type = "password";
-
-        eye.classList.remove("fa-eye-slash");
-        eye.classList.add("fa-eye");
-
-    }
-
+    password.type =
+        password.type === 'password'
+        ? 'text'
+        : 'password';
 }
 
 </script>
